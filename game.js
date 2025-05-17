@@ -1,17 +1,22 @@
-// game.js: Updated to accept full character object and include actions
-const INITIAL_STATE = (character) => ({
-  popularity: 100,
-  funds: 10000,
-  day: 1,
-  maxDays: 10,
-  party: character.party,
-  character,
-  states: STATES.reduce((acc, s) => { acc[s.abbr] = s.baseline; return acc; }, {}),
-  history: [],
-  policy: { Economy: "Neutral", Environment: "Neutral", Education: "Neutral", Healthcare: "Neutral" },
-  gameOver: false,
-  message: `Welcome to Run for Office as a ${character.party}!`
-});
+// game.js: Updated with fixes
+const INITIAL_STATE = (character) => {
+  const states = STATES.reduce((acc, s) => { acc[s.abbr] = s.baseline; return acc; }, {});
+  const popVote = Object.values(states).reduce((a,b) => a + b, 0);
+  return {
+    popularity: 100,
+    funds: 10000,
+    day: 1,
+    maxDays: 10,
+    party: character.party,
+    character,
+    states,
+    popVote,
+    history: [],
+    policy: { Economy: "Neutral", Environment: "Neutral", Education: "Neutral", Healthcare: "Neutral" },
+    gameOver: false,
+    message: `Welcome to Run for Office as a ${character.party}!`
+  };
+};
 
 function RunForOfficeApp() {
   const [character, setCharacter] = React.useState(null);
@@ -25,9 +30,17 @@ function RunForOfficeGame({ character }) {
 
   const log = entry => setState(prev => ({ ...prev, history: [...prev.history, entry] }));
 
-  const nextDay = () => state.day >= state.maxDays
-    ? endGame()
-    : setState(prev => ({ ...prev, day: prev.day + 1 }));
+  const nextDay = () => setState(prev => {
+    const newDay = prev.day + 1;
+    if (newDay > prev.maxDays) {
+      const outcome = prev.popularity >= WINNING_POPULARITY
+        ? "You won the election! 🎉"
+        : "You lost the election. Better luck next time.";
+      log(outcome);
+      return { ...prev, gameOver: true, message: outcome, day: prev.day };
+    }
+    return { ...prev, day: newDay };
+  });
 
   const updateAll = (popChange = 0, fundChange = 0, msg = "") => {
     setState(prev => {
@@ -36,38 +49,20 @@ function RunForOfficeGame({ character }) {
       const newStates = updateStatePerState(prev.states, popChange);
       const popVote = Object.values(newStates).reduce((a, b) => a + b, 0);
       const newMsg = msg || `Day ${prev.day}: No major events.`;
-      return {
-        ...prev,
-        popularity: newPop,
-        funds: newFunds,
-        states: newStates,
-        message: newMsg,
-        history: [...prev.history, newMsg],
-        popVote
-      };
+      return { ...prev, popularity: newPop, funds: newFunds, states: newStates, popVote, message: newMsg, history: [...prev.history, newMsg] };
     });
-  };
-
-  const endGame = () => {
-    const outcome = state.popularity >= 120
-      ? "You won the election! 🎉"
-      : "You lost the election. Better luck next time.";
-    setState(prev => ({ ...prev, gameOver: true, message: outcome }));
-    log(outcome);
   };
 
   const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
   const actions = {
-    rally:    () => { if(state.funds<2000) return updateAll(0,0,"Not enough funds."); const gain = Math.random()<0.7?rand(5,15):-rand(5,15); updateAll(gain,-2000,`Held a rally. ${gain>=0?'+':''}${gain} pop.`); nextDay(); },
-    ad:       () => { if(state.funds<3000) return updateAll(0,0,"Not enough funds."); const gain=rand(5,20); updateAll(gain,-3000,`Ran an ad. +${gain} pop.`); nextDay(); },
-    fundraise:() => { const m=rand(2000,4000), l=rand(2,5); updateAll(-l,m,`Fundraised. +$${m}, -${l} pop.`); nextDay(); },
-    debate:   () => { const g=rand(10,20), w=Math.random()<0.5; updateAll(w?g:-g,0, w?`Won debate. +${g} pop.`:`Lost debate. -${g} pop.`); nextDay(); },
+    rally:    () => { if(state.funds < 2000) return updateAll(0, 0, "Not enough funds for a rally."); const gain = Math.random() < 0.7 ? rand(5,15) : -rand(5,15); updateAll(gain, -2000, `Held a rally. ${gain>=0?'+':''}${gain} pop.`); nextDay(); },
+    ad:       () => { if(state.funds < 3000) return updateAll(0,0,"Not enough funds for an ad."); const gain = rand(5,20); updateAll(gain, -3000, `Ran an ad. +${gain} pop.`); nextDay(); },
+    fundraise:() => { const m = rand(2000,4000), l = rand(2,5); updateAll(-l, m, `Fundraised. +$${m}, -${l} pop.`); nextDay(); },
+    debate:   () => { const g = rand(10,20), w = Math.random() < 0.5; updateAll(w?g:-g, 0, w?`Won debate. +${g} pop.`:`Lost debate. -${g} pop.`); nextDay(); },
     rest:     () => { updateAll(0,0,"You rested. No changes."); nextDay(); },
-    quit:     () => { setState(prev=>({...prev,gameOver:true,message:"You quit."})); log("Quit campaign."); }
+    quit:     () => { setState(prev => ({ ...prev, gameOver: true, message: "You quit the campaign." })); log("You quit the campaign."); }
   };
-
-  const popVote = state.popVote || 0;
 
   return (
     <div className="space-y-6 p-4">
@@ -77,31 +72,24 @@ function RunForOfficeGame({ character }) {
         {state.character.homeState && <p><strong>Home State:</strong> {state.character.homeState}</p>}
         <p><strong>Day:</strong> {state.day} / {state.maxDays}</p>
         <p><strong>Popularity:</strong> {state.popularity}</p>
-        <p><strong>Popular Vote:</strong> {popVote}</p>
+        <p><strong>Popular Vote:</strong> {state.popVote}</p>
         <p><strong>Funds:</strong> ${state.funds}</p>
         <p><strong>Party:</strong> {state.party}</p>
         {state.character.bio && <p><strong>Bio:</strong> {state.character.bio}</p>}
+        {state.character.maritalStatus && <p><strong>Marital Status:</strong> {state.character.maritalStatus}</p>}
+        {state.character.educationLevel && <p><strong>Education Level:</strong> {state.character.educationLevel}</p>}
+        {state.character.institution && <p><strong>Institution:</strong> {state.character.institution}</p>}
         <p className="italic">{state.message}</p>
       </div>
       <ElectoralMap states={state.states} />
       {!state.gameOver && (
         <div className="grid grid-cols-2 gap-2">
-          <button onClick={actions.rally}    className="bg-blue-500 text-white p-2 rounded-xl">Hold Rally</button>
-          <button onClick={actions.ad}       className="bg-green-500 text-white p-2 rounded-xl">Run Ad</button>
-          <button onClick={actions.fundraise}className="bg-yellow-500 text-white p-2 rounded-xl">Fundraise</button>
-          <button onClick={actions.debate}   className="bg-purple-500 text-white p-2 rounded-xl">Debate</button>
-          <button onClick={actions.rest}     className="bg-gray-500 text-white p-2 rounded-xl">Rest</button>
-          <button onClick={actions.quit}     className="bg-red-600 text-white p-2 rounded-xl">Quit</button>
-        </div>
-      )}
-      {state.character.traits && (
-        <div className="bg-gray-100 p-4 rounded">
-          <h2 className="font-bold">Traits & Skills</h2>
-          <ul>
-            {Object.entries(state.character.traits).map(([t, v]) => (
-              <li key={t}>{t}: {v}</li>
-            ))}
-          </ul>
+          <button onClick={actions.rally} className="bg-blue-500 text-white p-2 rounded-xl">Hold Rally</button>
+          <button onClick={actions.ad} className="bg-green-500 text-white p-2 rounded-xl">Run Ad</button>
+          <button onClick={actions.fundraise} className="bg-yellow-500 text-white p-2 rounded-xl">Fundraise</button>
+          <button onClick={actions.debate} className="bg-purple-500 text-white p-2 rounded-xl">Debate</button>
+          <button onClick={actions.rest} className="bg-gray-500 text-white p-2 rounded-xl">Rest</button>
+          <button onClick={actions.quit} className="bg-red-600 text-white p-2 rounded-xl">Quit</button>
         </div>
       )}
       <div>
