@@ -1,12 +1,12 @@
-// game.js integrates electoral map into the game
+// game.js: Campaign logic with electoral map integration
 const INITIAL_STATE = (party) => ({
   popularity: 100,
   funds: 10000,
   day: 1,
   maxDays: 10,
-  party: party,
-  // initialize all states with 100 support
-  states: STATES.reduce((acc, s) => { acc[s.abbr] = 100; return acc; }, {}),
+  party,
+  // initialize each state at its baseline
+  states: STATES.reduce((acc, s) => { acc[s.abbr] = s.baseline; return acc; }, {}),
   history: [],
   policy: { Economy: "Neutral", Environment: "Neutral", Education: "Neutral", Healthcare: "Neutral" },
   gameOver: false,
@@ -23,20 +23,16 @@ function RunForOfficeApp() {
 function RunForOfficeGame({ party }) {
   const [state, setState] = React.useState(INITIAL_STATE(party));
 
-  const log = (entry) => setState(prev => ({ ...prev, history: [...prev.history, entry] }));
+  const log = entry => setState(prev => ({ ...prev, history: [...prev.history, entry] }));
 
-  const nextDay = () => {
-    if (state.day >= state.maxDays) endGame();
-    else setState(prev => ({ ...prev, day: prev.day + 1 }));
-  };
+  const nextDay = () => state.day >= state.maxDays ? endGame() : setState(prev => ({ ...prev, day: prev.day + 1 }));
 
   const updateAll = (popChange = 0, fundChange = 0, msg = "") => {
     setState(prev => {
-      // update global popularity/funds
       const newPop = Math.max(0, prev.popularity + popChange);
       const newFunds = Math.max(0, prev.funds + fundChange);
-      // update each state's support
       const newStates = updateStatePerState(prev.states, popChange);
+      const popVote = Object.values(newStates).reduce((a, b) => a + b, 0);
       const newMsg = msg || `Day ${prev.day}: No major events.`;
       return {
         ...prev,
@@ -44,7 +40,8 @@ function RunForOfficeGame({ party }) {
         funds: newFunds,
         states: newStates,
         message: newMsg,
-        history: [...prev.history, newMsg]
+        history: [...prev.history, newMsg],
+        popVote
       };
     });
   };
@@ -68,17 +65,19 @@ function RunForOfficeGame({ party }) {
     quit:     () => { setState(prev=>({...prev,gameOver:true,message:"You quit."})); log("Quit campaign."); }
   };
 
+  const popVote = state.popVote || 0;
+
   return (
     <div className="space-y-6 p-4">
       <h1 className="text-3xl font-bold">Run for Office</h1>
       <div className="bg-white p-4 rounded-xl shadow space-y-2">
         <p><strong>Day:</strong> {state.day} / {state.maxDays}</p>
         <p><strong>Popularity:</strong> {state.popularity}</p>
+        <p><strong>Popular Vote:</strong> {popVote}</p>
         <p><strong>Funds:</strong> ${state.funds}</p>
         <p><strong>Party:</strong> {state.party}</p>
         <p className="italic">{state.message}</p>
       </div>
-      {/* Electoral map */}
       <ElectoralMap states={state.states} />
       {!state.gameOver && (
         <div className="grid grid-cols-2 gap-2">
