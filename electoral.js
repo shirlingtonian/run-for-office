@@ -28,8 +28,6 @@ function ElectoralMap({ states }) {
             geographies
               .filter(d => STATES.some(s => s.name === d.properties.name))
               .map(geo => {
-                const abbr = geo.properties.name.match(/^(?:.{0,2})/)[0]; // workaround: we'll use name
-                // Actually find correct abbr
                 const st = STATES.find(s => s.name === geo.properties.name);
                 const support = states[st.abbr];
                 const opacity = Math.min(1, Math.max(0, support / 200));

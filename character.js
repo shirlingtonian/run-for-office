@@ -102,5 +102,5 @@ function CharacterCreation({ onStart }) {
         Start Campaign
       </button>
     </div>
-  );
+);
 }
